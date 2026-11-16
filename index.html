@@ -27,15 +27,12 @@ service: you can only use it with an account created for you by the family.</p>
 <p>This information is sent over an encrypted (HTTPS) connection to the family's own
 server, which is run by a parent at home.</p>
 
-<h3>Third-party AI processing</h3>
-<p>To write an answer, the family's server sends the text of your message to an AI model
-provider. Depending on the account, this is either a model running on the family's own
-computer or <strong>Google's Gemini API</strong>. When an answer needs current information,
-the search question may also be sent to a web search provider (Google Search or Tavily).
-Your username and password are never sent to these providers. Their handling of the text
-is governed by their own terms:
-<a href="https://ai.google.dev/gemini-api/terms">Gemini API terms</a>,
-<a href="https://policies.google.com/privacy">Google Privacy Policy</a>,
+<h3>AI processing and web search</h3>
+<p>Answers for this app are written by an AI model that runs on the family's own computer.
+Your messages are not sent to a hosted AI model provider. When an answer needs current
+information, the search question may be sent to a web search provider
+(<strong>Tavily</strong>). Your username and password are never sent to that provider. Its
+handling of the search text is governed by its own terms:
 <a href="https://tavily.com/privacy">Tavily Privacy Policy</a>.</p>
 
 <h3>What is stored</h3>
@@ -54,14 +51,15 @@ is governed by their own terms:
 <ul>
   <li>No advertising, analytics, or tracking.</li>
   <li>No access to your location, contacts, health data, or photos.</li>
-  <li>No selling of data, and no sharing with other companies beyond the AI and search
-      processing described above.</li>
+  <li>No selling of data, and no sharing with other companies beyond the web search
+      described above.</li>
 </ul>
 
 <h3>Children</h3>
 <p>The app is used by children in the family under their parents' supervision. Accounts are
-created only by a parent. A parent can review or delete a child's account and server data
-at any time.</p>
+created only by a parent. For children's accounts, each conversation is checked on the
+family's own computer, and a parent may be emailed an exchange that raises a safety
+concern. A parent can review or delete a child's account and server data at any time.</p>
 
 <h3>Deleting your data</h3>
 <p>Sign out in the app to remove the saved sign-in from the watch. To delete an account or
