@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Watch Setup</title>
+<style>
+  :root { --fg: #1d1d1f; --muted: #6e6e73; --bg: #fff; --card: #f5f5f7; --line: #d2d2d7; --accent: #0071e3; --ok: #1a7f37; --err: #c9302c; }
+  @media (prefers-color-scheme: dark) {
+    :root { --fg: #f5f5f7; --muted: #a1a1a6; --bg: #111; --card: #1c1c1e; --line: #3a3a3c; --accent: #4ea1ff; --ok: #3fb950; --err: #ff6b6b; }
+  }
+  * { box-sizing: border-box; }
+  body { font: 16px/1.5 -apple-system, system-ui, sans-serif; max-width: 34rem; margin: 0 auto; padding: 2rem 1rem 4rem; color: var(--fg); background: var(--bg); }
+  h1 { font-size: 1.5rem; margin-bottom: .25rem; }
+  h2 { font-size: 1.05rem; margin: 0 0 .5rem; }
+  .lede { color: var(--muted); margin-top: 0; }
+  section { background: var(--card); border-radius: 12px; padding: 1rem 1.1rem; margin: 1rem 0; }
+  section.disabled { opacity: .5; pointer-events: none; }
+  ol { padding-left: 1.2rem; margin: .25rem 0; }
+  li { margin: .3rem 0; }
+  label { display: block; font-weight: 600; font-size: .9rem; margin: .8rem 0 .25rem; }
+  .hint { font-weight: 400; color: var(--muted); font-size: .85rem; }
+  input { width: 100%; font: inherit; padding: .6rem .7rem; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--fg); }
+  input#code { font-family: ui-monospace, Menlo, monospace; font-size: 1.3rem; letter-spacing: .12em; text-transform: uppercase; }
+  button { font: inherit; font-weight: 600; padding: .65rem 1.2rem; border: 0; border-radius: 8px; background: var(--accent); color: #fff; cursor: pointer; margin-top: 1rem; }
+  button:disabled { opacity: .5; cursor: default; }
+  .status { margin-top: .8rem; font-size: .95rem; }
+  .status.ok { color: var(--ok); } .status.err { color: var(--err); }
+  a { color: var(--accent); }
+  code { font-family: ui-monospace, Menlo, monospace; font-size: .9em; }
+</style>
+</head>
+<body>
+<h1>Set up a watch</h1>
+<p class="lede">Connect a watch to one channel in your Discord server. The watch shows a pairing
+code; enter it here with your bot's details. The details are encrypted on this page so only that
+watch can read them.</p>
+
+<section>
+  <h2>1. Prepare a Discord bot (once)</h2>
+  <ol>
+    <li>In the <a href="https://discord.com/developers/applications" target="_blank" rel="noopener">Discord Developer Portal</a>,
+        create an application, open <strong>Bot</strong>, and copy its token.</li>
+    <li>On the same page, turn on <strong>Message Content Intent</strong>.</li>
+    <li>Paste the token below, then use the invite link that appears to add the bot to your server.
+        It asks for <em>View Channel</em>, <em>Read Message History</em> and <em>Manage Webhooks</em>.</li>
+    <li>In Discord, turn on <strong>Developer Mode</strong> (Settings › Advanced), right-click the channel
+        and choose <strong>Copy Channel ID</strong>.</li>
+  </ol>
+</section>
+
+<section>
+  <h2>2. Sign in with your Apple Account</h2>
+  <p class="hint">The details are delivered through Apple's iCloud, which needs you to be signed in.
+  Nothing is stored in your iCloud Drive.</p>
+  <div id="apple-sign-in-button"></div>
+  <div id="apple-sign-out-button"></div>
+  <div id="auth-status" class="status"></div>
+</section>
+
+<section id="form-section" class="disabled">
+  <h2>3. Enter the details</h2>
+  <form id="form" autocomplete="off">
+    <label for="code">Pairing code <span class="hint">shown on the watch</span></label>
+    <input id="code" inputmode="text" maxlength="11" placeholder="XXXX-XXXX" required>
+
+    <label for="token">Bot token</label>
+    <input id="token" type="password" spellcheck="false" required>
+    <div id="invite" class="hint"></div>
+
+    <label for="channel">Channel ID</label>
+    <input id="channel" inputmode="numeric" placeholder="e.g. 112233445566778899" required>
+
+    <label for="name">Name on the watch's messages <span class="hint">e.g. the child's first name</span></label>
+    <input id="name" maxlength="32" required>
+
+    <button id="submit" type="submit">Send to Watch</button>
+  </form>
+  <div id="status" class="status" role="status"></div>
+</section>
+
+<p class="hint">Your bot token goes only to the watch, encrypted. It is never sent to the app's
+maker. <a href="../#privacy">Privacy Policy</a></p>
+
+<script>
+// Fill in after creating the token in CloudKit Console (API Access > API Tokens).
+// CloudKit JS API tokens are public by design; restrict the token to this site's origin.
+const CLOUDKIT_API_TOKEN = "f6d3585996b90e11db6aeb83848b08496ce83ed9b61e26ccbb3d42de1608e33f";
+const CONTAINER_ID = "iCloud.com.younghwanjang.family-messenger-client";
+// App Store builds use production. Development builds of the watch app: add ?env=development.
+const ENVIRONMENT = new URLSearchParams(location.search).get("env") === "development" ? "development" : "production";
+
+// Must match PairingCrypto.swift.
+const ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+const CODE_LENGTH = 8;
+const SALT = "watch-pairing-v1";
+const CODE_LIFETIME_MS = 10 * 60 * 1000;
+// View Channel | Read Message History | Manage Webhooks
+const BOT_PERMISSIONS = (1n << 10n) | (1n << 16n) | (1n << 29n);
+
+const $ = (id) => document.getElementById(id);
+const enc = new TextEncoder();
+let db = null;
+
+function setStatus(el, text, kind) {
+  el.textContent = text;
+  el.className = "status" + (kind ? " " + kind : "");
+}
+
+function b64(bytes) {
+  let s = "";
+  new Uint8Array(bytes).forEach((b) => (s += String.fromCharCode(b)));
+  return btoa(s);
+}
+function unb64(s) {
+  return Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+}
+
+function normalizeCode(raw) {
+  return raw.toUpperCase().replace(/[^0-9A-Z]/g, "")
+    .replace(/O/g, "0").replace(/[IL]/g, "1");
+}
+
+async function codeFor(publicKey) {
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", publicKey));
+  let out = "", buffer = 0, bits = 0;
+  for (const byte of digest) {
+    buffer = (buffer << 8) | byte;
+    bits += 8;
+    while (bits >= 5 && out.length < CODE_LENGTH) {
+      bits -= 5;
+      out += ALPHABET[(buffer >> bits) & 31];
+    }
+    buffer &= (1 << bits) - 1;
+    if (out.length === CODE_LENGTH) break;
+  }
+  return out;
+}
+
+// Bot token's first part is the bot's user ID, which is also its application ID.
+function applicationIdFrom(token) {
+  try {
+    const id = atob(token.split(".")[0].replace(/-/g, "+").replace(/_/g, "/"));
+    return /^\d{17,20}$/.test(id) ? id : null;
+  } catch { return null; }
+}
+
+$("token").addEventListener("input", () => {
+  const id = applicationIdFrom($("token").value.trim());
+  $("invite").innerHTML = id
+    ? `<a target="_blank" rel="noopener" href="https://discord.com/oauth2/authorize?client_id=${id}&scope=bot&permissions=${BOT_PERMISSIONS}">Add this bot to your server</a>`
+    : "";
+});
+
+async function encryptFor(watchPublicKey, code, payload) {
+  const watchKey = await crypto.subtle.importKey("raw", watchPublicKey, { name: "ECDH", namedCurve: "P-256" }, false, []);
+  const ephemeral = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveBits"]);
+  const shared = await crypto.subtle.deriveBits({ name: "ECDH", public: watchKey }, ephemeral.privateKey, 256);
+  const hkdf = await crypto.subtle.importKey("raw", shared, "HKDF", false, ["deriveKey"]);
+  const key = await crypto.subtle.deriveKey(
+    { name: "HKDF", hash: "SHA-256", salt: enc.encode(SALT), info: enc.encode(code) },
+    hkdf, { name: "AES-GCM", length: 256 }, false, ["encrypt"]);
+  const nonce = crypto.getRandomValues(new Uint8Array(12));
+  const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv: nonce }, key, enc.encode(JSON.stringify(payload)));
+  return {
+    ephemeralPublicKey: b64(await crypto.subtle.exportKey("raw", ephemeral.publicKey)),
+    nonce: b64(nonce),
+    ciphertext: b64(ciphertext),
+  };
+}
+
+async function fetchRecord(name) {
+  const response = await db.fetchRecords([name]);
+  if (response.hasErrors) {
+    const error = response.errors[0];
+    if (error.ckErrorCode === "NOT_FOUND") return null;
+    throw new Error(error.reason || error.ckErrorCode);
+  }
+  return response.records[0];
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+$("form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const status = $("status");
+  const code = normalizeCode($("code").value);
+  const botToken = $("token").value.trim();
+  const channelId = $("channel").value.trim();
+  const displayName = $("name").value.trim();
+
+  if (code.length !== CODE_LENGTH || [...code].some((c) => !ALPHABET.includes(c)))
+    return setStatus(status, "The pairing code has 8 letters and numbers.", "err");
+  if (botToken.split(".").length !== 3)
+    return setStatus(status, "That doesn't look like a bot token.", "err");
+  if (!/^\d{17,20}$/.test(channelId))
+    return setStatus(status, "The channel ID is a long number. Use Copy Channel ID in Discord.", "err");
+  if (!displayName || /discord|clyde|everyone|here/i.test(displayName))
+    return setStatus(status, "Choose a name without the words Discord, Clyde, everyone or here.", "err");
+
+  $("submit").disabled = true;
+  try {
+    setStatus(status, "Finding the watch…");
+    const request = await fetchRecord("req-" + code);
+    if (!request) throw new Error("No watch is showing that code. Check it, or get a new code on the watch.");
+    if (Date.now() - request.created.timestamp > CODE_LIFETIME_MS)
+      throw new Error("That code has expired. Get a new code on the watch.");
+    const publicKey = unb64(request.fields.publicKey.value);
+    if ((await codeFor(publicKey)) !== code)
+      throw new Error("The watch's key doesn't match the code. Get a new code on the watch.");
+
+    setStatus(status, "Encrypting and sending…");
+    const sealed = await encryptFor(publicKey, code, { v: 1, botToken, channelId, displayName });
+    const saved = await db.saveRecords([{
+      recordType: "PairingResponse",
+      recordName: "resp-" + code,
+      fields: {
+        ephemeralPublicKey: { value: sealed.ephemeralPublicKey },
+        nonce: { value: sealed.nonce },
+        ciphertext: { value: sealed.ciphertext },
+      },
+    }]);
+    if (saved.hasErrors) throw new Error(saved.errors[0].reason || saved.errors[0].ckErrorCode);
+
+    // The watch deletes its request once it has the details.
+    setStatus(status, "Sent. Waiting for the watch to pick it up…");
+    let pickedUp = false;
+    for (let i = 0; i < 40 && !pickedUp; i++) {
+      await sleep(3000);
+      pickedUp = !(await fetchRecord("req-" + code));
+    }
+    await db.deleteRecords(["resp-" + code]).catch(() => {});
+    if (pickedUp) {
+      $("token").value = "";
+      setStatus(status, "Done. The watch is connecting to the channel. If it shows a problem, fix it here and pair again.", "ok");
+    } else {
+      setStatus(status, "The watch didn't respond. Make sure the code is still on screen and try again.", "err");
+    }
+  } catch (error) {
+    setStatus(status, error.message || String(error), "err");
+  } finally {
+    $("submit").disabled = false;
+  }
+});
+
+function onSignedIn(user) {
+  setStatus($("auth-status"), "Signed in.", "ok");
+  $("form-section").classList.remove("disabled");
+}
+function onSignedOut() {
+  setStatus($("auth-status"), "");
+  $("form-section").classList.add("disabled");
+}
+
+window.addEventListener("cloudkitloaded", () => {
+  CloudKit.configure({
+    containers: [{
+      containerIdentifier: CONTAINER_ID,
+      apiTokenAuth: {
+        apiToken: CLOUDKIT_API_TOKEN,
+        persist: true,
+        signInButton: { id: "apple-sign-in-button", theme: "black" },
+        signOutButton: { id: "apple-sign-out-button", theme: "black" },
+      },
+      environment: ENVIRONMENT,
+    }],
+  });
+  const container = CloudKit.getDefaultContainer();
+  db = container.publicCloudDatabase;
+
+  const watchAuth = () => container.setUpAuth().then((user) => {
+    if (user) {
+      onSignedIn(user);
+      container.whenUserSignsOut().then(() => { onSignedOut(); watchAuth(); });
+    } else {
+      onSignedOut();
+      container.whenUserSignsIn().then(() => watchAuth());
+    }
+  }).catch((error) => setStatus($("auth-status"), "iCloud is unavailable: " + (error.message || error), "err"));
+  watchAuth();
+});
+</script>
+<script src="https://cdn.apple-cloudkit.com/ck/2/cloudkit.js" async></script>
+</body>
+</html>
