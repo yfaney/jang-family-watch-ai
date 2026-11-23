@@ -83,12 +83,20 @@ watch can read them.</p>
 maker. <a href="../#privacy">Privacy Policy</a></p>
 
 <script>
-// Fill in after creating the token in CloudKit Console (API Access > API Tokens).
-// CloudKit JS API tokens are public by design; restrict the token to this site's origin.
-const CLOUDKIT_API_TOKEN = "f6d3585996b90e11db6aeb83848b08496ce83ed9b61e26ccbb3d42de1608e33f";
+// CloudKit Console > API Access > API Tokens. Each environment has its own token.
+// CloudKit JS API tokens are public by design; each is restricted to this site's origin.
+const CLOUDKIT_API_TOKENS = {
+  development: "f6d3585996b90e11db6aeb83848b08496ce83ed9b61e26ccbb3d42de1608e33f",
+  production: "", // create after deploying the schema to production
+};
 const CONTAINER_ID = "iCloud.com.younghwanjang.family-messenger-client";
-// App Store builds use production. Development builds of the watch app: add ?env=development.
-const ENVIRONMENT = new URLSearchParams(location.search).get("env") === "development" ? "development" : "production";
+// App Store builds use production; development builds of the watch app use development.
+// ?env= overrides. Until production has a token, development is the default.
+const REQUESTED_ENV = new URLSearchParams(location.search).get("env");
+const ENVIRONMENT = REQUESTED_ENV in CLOUDKIT_API_TOKENS && CLOUDKIT_API_TOKENS[REQUESTED_ENV]
+  ? REQUESTED_ENV
+  : (CLOUDKIT_API_TOKENS.production ? "production" : "development");
+const CLOUDKIT_API_TOKEN = CLOUDKIT_API_TOKENS[ENVIRONMENT];
 
 // Must match PairingCrypto.swift.
 const ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
