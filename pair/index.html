@@ -27,7 +27,9 @@
   .status { margin-top: .8rem; font-size: .95rem; }
   .status.ok { color: var(--ok); } .status.err { color: var(--err); }
   a { color: var(--accent); }
-  label a.hint { color: var(--accent); margin-left: .35rem; }
+  .field-label { display: flex; align-items: baseline; gap: .4rem; margin: .8rem 0 .25rem; }
+  .field-label label { margin: 0; }
+  .field-label a.hint { color: var(--accent); }
   a.help { display: inline-flex; align-items: center; justify-content: center; width: 1.15rem; height: 1.15rem;
            margin-left: .3rem; border-radius: 50%; border: 1.5px solid var(--accent); color: var(--accent);
            font-size: .75rem; font-weight: 700; text-decoration: none; vertical-align: 1px; }
@@ -69,15 +71,15 @@ watch can read them.</p>
     <label for="code">Pairing code <span class="hint">shown on the watch</span></label>
     <input id="code" inputmode="text" maxlength="11" placeholder="XXXX-XXXX" required>
 
-    <label for="token">Bot token
+    <div class="field-label"><label for="token">Bot token</label>
       <a class="help" href="https://discord.com/developers/docs/quick-start/getting-started#fetching-your-credentials"
-         target="_blank" rel="noopener" title="How to get a bot token" aria-label="How to get a bot token">?</a></label>
+         target="_blank" rel="noopener" title="How to get a bot token" aria-label="How to get a bot token">?</a></div>
     <input id="token" type="password" spellcheck="false" required>
     <div id="invite" class="hint"></div>
 
-    <label for="channel">Channel ID
+    <div class="field-label"><label for="channel">Channel ID</label>
       <a class="hint" href="https://support.discord.com/hc/en-us/articles/206346498-Where-can-I-find-my-User-Server-Message-ID"
-         target="_blank" rel="noopener">How to find the channel ID</a></label>
+         target="_blank" rel="noopener">How to find the channel ID</a></div>
     <input id="channel" inputmode="numeric" placeholder="e.g. 112233445566778899" required>
 
     <label for="name">Name on the watch's messages <span class="hint">e.g. the child's first name</span></label>
