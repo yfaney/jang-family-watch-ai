@@ -32,8 +32,8 @@
 </head>
 <body>
 <h1>Set up a watch</h1>
-<p class="lede">Connect a watch to one channel in your Discord server. The watch shows a pairing
-code; enter it here with your bot's details. The details are encrypted on this page so only that
+<p class="lede">Connect a watch to one channel in your Discord server. Scan the QR code on the
+watch to open this page with its pairing code filled in, then add your bot's details. The details are encrypted on this page so only that
 watch can read them.</p>
 
 <section>
@@ -151,6 +151,14 @@ function applicationIdFrom(token) {
     const id = atob(token.split(".")[0].replace(/-/g, "+").replace(/_/g, "/"));
     return /^\d{17,20}$/.test(id) ? id : null;
   } catch { return null; }
+}
+
+// The watch's QR code opens this page with ?code=XXXXXXXX.
+{
+  const preset = normalizeCode(new URLSearchParams(location.search).get("code") || "");
+  if (preset.length === CODE_LENGTH) {
+    $("code").value = preset.slice(0, 4) + "-" + preset.slice(4);
+  }
 }
 
 $("token").addEventListener("input", () => {
